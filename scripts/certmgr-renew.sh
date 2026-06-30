@@ -11,8 +11,11 @@ LE_EMAIL="${LE_EMAIL:-}"
 PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-}"
 ADDITIONAL_DOMAINS_CSV="${ADDITIONAL_DOMAINS_CSV:-}"
 KEY_VAULT_NAME="${KEY_VAULT_NAME:-}"
+KEY_VAULT_RESOURCE_GROUP="${KEY_VAULT_RESOURCE_GROUP:-}"
 KEY_VAULT_CERT_NAME="${KEY_VAULT_CERT_NAME:-}"
 KEY_VAULT_SECRET_NAME="${KEY_VAULT_SECRET_NAME:-}"
+KEY_VAULT_ACCESS_MODE="${KEY_VAULT_ACCESS_MODE:-}"
+KEY_VAULT_PRIVATE_DNS_ZONE_RESOURCE_GROUP="${KEY_VAULT_PRIVATE_DNS_ZONE_RESOURCE_GROUP:-}"
 PRIMARY_HOSTNAME="${PRIMARY_HOSTNAME:-}"
 INCLUDE_WILDCARD_HOSTNAME="${INCLUDE_WILDCARD_HOSTNAME:-true}"
 DNS_ZONE_NAME="${DNS_ZONE_NAME:-}"
@@ -22,6 +25,8 @@ STATUS_SECRET_NAME="${STATUS_SECRET_NAME:-cert-runner-last-status}"
 DEPLOYMENT_SECRET_NAME="${DEPLOYMENT_SECRET_NAME:-cert-runner-last-deployment}"
 RENEWAL_THRESHOLD_DAYS="${RENEWAL_THRESHOLD_DAYS:-21}"
 TARGET_RESOURCE_GROUP="${TARGET_RESOURCE_GROUP:-}"
+RUNNER_PREFIX="${RUNNER_PREFIX:-l7cert}"
+TEMPLATE_URI="${TEMPLATE_URI:-}"
 
 log() {
   printf '%s\n' "$*"
@@ -236,12 +241,18 @@ az login --identity >/dev/null
 CONFIG_JSON="$(kv_secret_value "$CONFIG_SECRET_NAME")"
 if [[ -n "$CONFIG_JSON" ]]; then
   [[ -z "$LE_EMAIL" ]] && LE_EMAIL="$(config_get "$CONFIG_JSON" 'LetEncryptEmail')"
+  [[ -z "$TARGET_RESOURCE_GROUP" ]] && TARGET_RESOURCE_GROUP="$(config_get "$CONFIG_JSON" 'TargetResourceGroup')"
   [[ -z "$PRIMARY_HOSTNAME" ]] && PRIMARY_HOSTNAME="$(config_get "$CONFIG_JSON" 'PrimaryHostname')"
   [[ -z "$ADDITIONAL_DOMAINS_CSV" ]] && ADDITIONAL_DOMAINS_CSV="$(config_get "$CONFIG_JSON" 'AcmeDomainsCsv')"
+  [[ -z "$KEY_VAULT_RESOURCE_GROUP" ]] && KEY_VAULT_RESOURCE_GROUP="$(config_get "$CONFIG_JSON" 'KeyVaultResourceGroup')"
   [[ -z "$KEY_VAULT_CERT_NAME" ]] && KEY_VAULT_CERT_NAME="$(config_get "$CONFIG_JSON" 'KeyVaultCertificateName')"
   [[ -z "$KEY_VAULT_SECRET_NAME" ]] && KEY_VAULT_SECRET_NAME="$(config_get "$CONFIG_JSON" 'KeyVaultSecretName')"
+  [[ -z "$KEY_VAULT_ACCESS_MODE" ]] && KEY_VAULT_ACCESS_MODE="$(config_get "$CONFIG_JSON" 'KeyVaultAccessMode')"
+  [[ -z "$KEY_VAULT_PRIVATE_DNS_ZONE_RESOURCE_GROUP" ]] && KEY_VAULT_PRIVATE_DNS_ZONE_RESOURCE_GROUP="$(config_get "$CONFIG_JSON" 'KeyVaultPrivateDnsZoneResourceGroup')"
   [[ -z "$DNS_ZONE_NAME" ]] && DNS_ZONE_NAME="$(config_get "$CONFIG_JSON" 'DnsZoneName')"
   [[ -z "$DNS_ZONE_RESOURCE_GROUP" ]] && DNS_ZONE_RESOURCE_GROUP="$(config_get "$CONFIG_JSON" 'DnsZoneResourceGroup')"
+  [[ -z "$RUNNER_PREFIX" ]] && RUNNER_PREFIX="$(config_get "$CONFIG_JSON" 'RunnerPrefix')"
+  [[ -z "$TEMPLATE_URI" ]] && TEMPLATE_URI="$(config_get "$CONFIG_JSON" 'TemplateUri')"
 fi
 
 mapfile -t desired_domains < <(normalize_domains "$PRIMARY_HOSTNAME" "$ADDITIONAL_DOMAINS_CSV" "$INCLUDE_WILDCARD_HOSTNAME")
@@ -295,16 +306,26 @@ fi
 
 config_payload="$(jq -cn \
   --arg le "$LE_EMAIL" \
+  --arg targetRg "$TARGET_RESOURCE_GROUP" \
   --arg kv "$KEY_VAULT_NAME" \
+  --arg kvrg "$KEY_VAULT_RESOURCE_GROUP" \
   --arg cert "$cert_name_effective" \
   --arg secret "$KEY_VAULT_SECRET_NAME" \
+  --arg accessMode "$KEY_VAULT_ACCESS_MODE" \
+  --arg kvPrivateDnsRg "$KEY_VAULT_PRIVATE_DNS_ZONE_RESOURCE_GROUP" \
   --arg host "$PRIMARY_HOSTNAME" \
   --arg dns "$DNS_ZONE_NAME" \
   --arg dnsrg "$DNS_ZONE_RESOURCE_GROUP" \
+  --arg configSecret "$CONFIG_SECRET_NAME" \
+  --arg statusSecret "$STATUS_SECRET_NAME" \
+  --arg deploymentSecret "$DEPLOYMENT_SECRET_NAME" \
+  --arg prefix "$RUNNER_PREFIX" \
+  --arg templateUri "$TEMPLATE_URI" \
   --arg domains_csv "$(IFS=,; echo "${desired_domains[*]}")" \
+  --argjson threshold "$RENEWAL_THRESHOLD_DAYS" \
   --argjson include_wildcard "$(json_bool "$INCLUDE_WILDCARD_HOSTNAME")" \
   --arg updated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  '{LetEncryptEmail:$le,KeyVaultName:$kv,KeyVaultCertificateName:$cert,KeyVaultSecretName:$secret,PrimaryHostname:$host,DnsZoneName:$dns,DnsZoneResourceGroup:$dnsrg,AcmeDomainsCsv:$domains_csv,IncludeWildcardHostname:$include_wildcard,updatedUtc:$updated}')"
+  '{LetEncryptEmail:$le,TargetResourceGroup:$targetRg,KeyVaultName:$kv,KeyVaultResourceGroup:$kvrg,KeyVaultCertificateName:$cert,KeyVaultSecretName:$secret,KeyVaultAccessMode:$accessMode,KeyVaultPrivateDnsZoneResourceGroup:$kvPrivateDnsRg,PrimaryHostname:$host,DnsZoneName:$dns,DnsZoneResourceGroup:$dnsrg,AcmeDomainsCsv:$domains_csv,IncludeWildcardHostname:$include_wildcard,ConfigSecretName:$configSecret,StatusSecretName:$statusSecret,DeploymentSecretName:$deploymentSecret,RenewalThresholdDays:$threshold,RunnerPrefix:$prefix,TemplateUri:$templateUri,updatedUtc:$updated}')"
 kv_set_secret "$CONFIG_SECRET_NAME" "$config_payload"
 
 deployment_payload="$(jq -cn \
