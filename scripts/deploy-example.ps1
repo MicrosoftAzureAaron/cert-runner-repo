@@ -1,5 +1,5 @@
 param(
-    [string]$TemplateFile = 'infra/cert-runner/main.bicep'
+    [string]$TemplateFile = 'infra/cert-runner/main.json'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,6 +11,7 @@ $requiredVars = @(
     'CERT_DNS_ZONE_RESOURCE_GROUP',
     'CERT_KEYVAULT_NAME',
     'CERT_KEYVAULT_RESOURCE_GROUP',
+    'CERT_KEYVAULT_ACCESS_MODE',
     'CERT_PRIMARY_DOMAIN',
     'CERT_ADDITIONAL_DOMAINS_JSON',
     'CERT_LE_EMAIL',
@@ -51,6 +52,7 @@ $args = @(
         "dnsZoneResourceGroup=$([Environment]::GetEnvironmentVariable('CERT_DNS_ZONE_RESOURCE_GROUP'))",
         "keyVaultName=$([Environment]::GetEnvironmentVariable('CERT_KEYVAULT_NAME'))",
         "keyVaultResourceGroup=$([Environment]::GetEnvironmentVariable('CERT_KEYVAULT_RESOURCE_GROUP'))",
+        "keyVaultAccessMode=$([Environment]::GetEnvironmentVariable('CERT_KEYVAULT_ACCESS_MODE'))",
         "primaryDomain=$([Environment]::GetEnvironmentVariable('CERT_PRIMARY_DOMAIN'))",
         "additionalDomains=$([Environment]::GetEnvironmentVariable('CERT_ADDITIONAL_DOMAINS_JSON'))",
         "letsEncryptEmail=$([Environment]::GetEnvironmentVariable('CERT_LE_EMAIL'))",

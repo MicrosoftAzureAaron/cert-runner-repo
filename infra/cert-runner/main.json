@@ -49,6 +49,48 @@
         "description": "Resource group containing the Key Vault."
       }
     },
+    "createManagedKeyVault": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Create a managed Key Vault in this deployment resource group if one does not exist."
+      }
+    },
+    "keyVaultAccessMode": {
+      "type": "string",
+      "defaultValue": "PublicAccess",
+      "metadata": {
+        "description": "Key Vault connectivity mode: PublicAccess, ServiceEndpoint, or PrivateEndpoint."
+      }
+    },
+    "keyVaultTenantId": {
+      "type": "string",
+      "defaultValue": "[subscription().tenantId]",
+      "metadata": {
+        "description": "Tenant ID for a managed Key Vault when createManagedKeyVault is true."
+      }
+    },
+    "persistManagedKeyVault": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Keep managed Key Vault after cert-runner cleanup."
+      }
+    },
+    "applyManagedKeyVaultLock": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Apply delete lock to managed persistent Key Vault."
+      }
+    },
+    "dndDeleteAfterUtc": {
+      "type": "string",
+      "defaultValue": "Never",
+      "metadata": {
+        "description": "deleteAfterUtc tag value for managed persistent Key Vault."
+      }
+    },
     "keyVaultCertificateName": {
       "type": "string",
       "metadata": {
@@ -114,6 +156,27 @@
       "metadata": {
         "description": "Delete the VM after successful import."
       }
+    },
+    "keyVaultPrivateDnsZoneName": {
+      "type": "string",
+      "defaultValue": "privatelink.vaultcore.azure.net",
+      "metadata": {
+        "description": "Private DNS zone name used for Key Vault private endpoint resolution."
+      }
+    },
+    "keyVaultPrivateDnsZoneResourceGroup": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Resource group containing the private DNS zone for Key Vault."
+      }
+    },
+    "createPrivateDnsZone": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Create private DNS zone in the current RG when using private endpoint mode."
+      }
     }
   },
   "variables": {
@@ -123,6 +186,14 @@
     "vnetName": "[format('{0}-runner-vnet', parameters('prefix'))]",
     "subnetName": "runner-subnet",
     "nicName": "[format('{0}-runner-nic', parameters('prefix'))]",
+    "privateEndpointName": "[format('{0}-kv-pe', parameters('prefix'))]",
+    "privateDnsZoneLinkName": "[format('{0}-kvdns-link', parameters('prefix'))]",
+    "isPublicAccessMode": "[equals(parameters('keyVaultAccessMode'), 'PublicAccess')]",
+    "isServiceEndpointMode": "[equals(parameters('keyVaultAccessMode'), 'ServiceEndpoint')]",
+    "isPrivateEndpointMode": "[equals(parameters('keyVaultAccessMode'), 'PrivateEndpoint')]",
+    "effectiveKeyVaultId": "[if(parameters('createManagedKeyVault'), resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), resourceId(parameters('keyVaultResourceGroup'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName')))]",
+    "privateDnsZoneId": "[if(parameters('createPrivateDnsZone'), resourceId('Microsoft.Network/privateDnsZones', parameters('keyVaultPrivateDnsZoneName')), resourceId(parameters('keyVaultPrivateDnsZoneResourceGroup'), 'Microsoft.Network/privateDnsZones', parameters('keyVaultPrivateDnsZoneName')))]",
+    "canManagePrivateDnsInCurrentRg": "[equals(parameters('keyVaultPrivateDnsZoneResourceGroup'), resourceGroup().name)]",
     "defaultCloudInit": "#cloud-config\r\npackage_update: true\r\npackages:\r\n  - certbot\r\n  - python3-certbot-dns-azure\r\n  - jq\r\nruncmd:\r\n  - [ bash, -lc, \"curl -sL https://aka.ms/InstallAzureCLIDeb | bash\" ]\r\n  - [ bash, -lc, \"mkdir -p /opt/certmgr\" ]\r\n  - [ bash, -lc, \"echo Ready > /opt/certmgr/bootstrap.complete\" ]\r\n"
   },
   "resources": [
@@ -180,7 +251,9 @@
               "addressPrefix": "10.99.0.0/26",
               "networkSecurityGroup": {
                 "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
-              }
+              },
+              "privateEndpointNetworkPolicies": "[if(variables('isPrivateEndpointMode'), 'Disabled', 'Enabled')]",
+              "serviceEndpoints": "[if(variables('isServiceEndpointMode'), createArray(createObject('service', 'Microsoft.KeyVault')), createArray())]"
             }
           }
         ]
@@ -286,6 +359,118 @@
       ]
     },
     {
+      "condition": "[parameters('createManagedKeyVault')]",
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "name": "[parameters('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "cleanupPolicy": "DND",
+        "deleteAfterUtc": "[parameters('dndDeleteAfterUtc')]",
+        "certRunnerPersistent": "[string(parameters('persistManagedKeyVault'))]",
+        "deployedBy": "cert-runner-template"
+      },
+      "properties": {
+        "tenantId": "[parameters('keyVaultTenantId')]",
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "enableRbacAuthorization": true,
+        "publicNetworkAccess": "[if(variables('isPrivateEndpointMode'), 'Disabled', 'Enabled')]",
+        "networkAcls": {
+          "bypass": "AzureServices",
+          "defaultAction": "[if(variables('isPublicAccessMode'), 'Allow', 'Deny')]",
+          "virtualNetworkRules": "[if(variables('isServiceEndpointMode'), createArray(createObject('id', reference(resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')), '2024-05-01').subnets[0].id)), createArray())]",
+          "ipRules": []
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ]
+    },
+    {
+      "condition": "[and(parameters('createManagedKeyVault'), parameters('persistManagedKeyVault'), parameters('applyManagedKeyVaultLock'))]",
+      "type": "Microsoft.KeyVault/vaults/providers/locks",
+      "apiVersion": "2020-05-01",
+      "name": "[format('{0}/Microsoft.Authorization/cert-runner-dnd-lock', parameters('keyVaultName'))]",
+      "properties": {
+        "level": "CanNotDelete",
+        "notes": "Persisted by cert-runner deployment for future renewals."
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[and(variables('isPrivateEndpointMode'), parameters('createPrivateDnsZone'), variables('canManagePrivateDnsInCurrentRg'))]",
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2024-06-01",
+      "name": "[parameters('keyVaultPrivateDnsZoneName')]",
+      "location": "global"
+    },
+    {
+      "condition": "[and(variables('isPrivateEndpointMode'), variables('canManagePrivateDnsInCurrentRg'))]",
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2024-06-01",
+      "name": "[format('{0}/{1}', parameters('keyVaultPrivateDnsZoneName'), variables('privateDnsZoneLinkName'))]",
+      "location": "global",
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ]
+    },
+    {
+      "condition": "[variables('isPrivateEndpointMode')]",
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2024-05-01",
+      "name": "[variables('privateEndpointName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subnet": {
+          "id": "[reference(resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')), '2024-05-01').subnets[0].id]"
+        },
+        "privateLinkServiceConnections": [
+          {
+            "name": "kv-connection",
+            "properties": {
+              "privateLinkServiceId": "[variables('effectiveKeyVaultId')]",
+              "groupIds": [
+                "vault"
+              ]
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ]
+    },
+    {
+      "condition": "[variables('isPrivateEndpointMode')]",
+      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+      "apiVersion": "2024-05-01",
+      "name": "[format('{0}/default', variables('privateEndpointName'))]",
+      "properties": {
+        "privateDnsZoneConfigs": [
+          {
+            "name": "vault-dns",
+            "properties": {
+              "privateDnsZoneId": "[variables('privateDnsZoneId')]"
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName'))]"
+      ]
+    },
+    {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
       "scope": "[resourceId(parameters('dnsZoneResourceGroup'), 'Microsoft.Network/dnsZones', parameters('dnsZoneName'))]",
@@ -302,8 +487,8 @@
     {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId(parameters('keyVaultResourceGroup'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
-      "name": "[guid(resourceId(parameters('keyVaultResourceGroup'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName')), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'keyvault-certificates-officer')]",
+      "scope": "[variables('effectiveKeyVaultId')]",
+      "name": "[guid(variables('effectiveKeyVaultId'), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'keyvault-certificates-officer')]",
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a4417e6f-fecd-4de8-b567-7b0420556985')]",
         "principalId": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), '2024-03-01', 'full').identity.principalId]",
@@ -329,7 +514,19 @@
     },
     "keyVaultId": {
       "type": "string",
-      "value": "[resourceId(parameters('keyVaultResourceGroup'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+      "value": "[variables('effectiveKeyVaultId')]"
+    },
+    "keyVaultAccessModeUsed": {
+      "type": "string",
+      "value": "[parameters('keyVaultAccessMode')]"
+    },
+    "managedKeyVaultCreated": {
+      "type": "bool",
+      "value": "[parameters('createManagedKeyVault')]"
+    },
+    "privateEndpointCreated": {
+      "type": "bool",
+      "value": "[variables('isPrivateEndpointMode')]"
     },
     "certDomains": {
       "type": "array",

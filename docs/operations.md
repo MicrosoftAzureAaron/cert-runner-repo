@@ -16,7 +16,10 @@ PowerShell example:
 $env:AZ_SUBSCRIPTION_ID='00000000-0000-0000-0000-000000000000'
 $env:AZ_RESOURCE_GROUP='your-resource-group'
 $env:CERT_DNS_ZONE_NAME='example.com'
+$env:CERT_DNS_ZONE_RESOURCE_GROUP='your-dns-zone-rg'
 $env:CERT_KEYVAULT_NAME='your-keyvault-name'
+$env:CERT_KEYVAULT_RESOURCE_GROUP='your-keyvault-rg'
+$env:CERT_KEYVAULT_ACCESS_MODE='PrivateEndpoint'
 $env:CERT_PRIMARY_DOMAIN='example.com'
 $env:CERT_ADDITIONAL_DOMAINS_JSON='["*.example.com"]'
 $env:CERT_LE_EMAIL='ops@example.com'
@@ -24,6 +27,20 @@ $env:CERT_VM_ADMIN_SSH_PUBLIC_KEY='ssh-rsa REPLACE_ME'
 $env:CERT_KEYVAULT_CERT_NAME='tls-cert'
 
 ./scripts/deploy-example.ps1
+
+## Access mode notes
+
+- `PublicAccess`: Uses Key Vault public endpoint.
+- `ServiceEndpoint`: Uses `Microsoft.KeyVault` service endpoint on runner subnet.
+- `PrivateEndpoint`: Creates/uses Key Vault private endpoint and private DNS mapping.
+
+For existing private-only Key Vaults, use `PrivateEndpoint` and ensure the deployment identity can create:
+
+- private endpoint resources in the deployment RG
+- private DNS zone records/links for `privatelink.vaultcore.azure.net`
+- role assignments at DNS zone and Key Vault scopes
+
+If no Key Vault exists and automation enables managed Key Vault creation, the template can create a managed Key Vault in the cert-runner RG with DND tags and optional delete lock so it persists between runs.
 
 ## Run renewal script on the VM
 
