@@ -29,10 +29,24 @@
         "description": "DNS zone name for ACME DNS-01 validation."
       }
     },
+    "dnsZoneResourceGroup": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Resource group containing the DNS zone."
+      }
+    },
     "keyVaultName": {
       "type": "string",
       "metadata": {
         "description": "Key Vault name where certificate is imported."
+      }
+    },
+    "keyVaultResourceGroup": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Resource group containing the Key Vault."
       }
     },
     "keyVaultCertificateName": {
@@ -274,8 +288,8 @@
     {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.Network/dnsZones', parameters('dnsZoneName'))]",
-      "name": "[guid(resourceId('Microsoft.Network/dnsZones', parameters('dnsZoneName')), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'dns-zone-contributor')]",
+      "scope": "[resourceId(parameters('dnsZoneResourceGroup'), 'Microsoft.Network/dnsZones', parameters('dnsZoneName'))]",
+      "name": "[guid(resourceId(parameters('dnsZoneResourceGroup'), 'Microsoft.Network/dnsZones', parameters('dnsZoneName')), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'dns-zone-contributor')]",
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'befefa01-2a29-4197-83a8-272ff33ce314')]",
         "principalId": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), '2024-03-01', 'full').identity.principalId]",
@@ -288,8 +302,8 @@
     {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
-      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'keyvault-certificates-officer')]",
+      "scope": "[resourceId(parameters('keyVaultResourceGroup'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+      "name": "[guid(resourceId(parameters('keyVaultResourceGroup'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName')), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'keyvault-certificates-officer')]",
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a4417e6f-fecd-4de8-b567-7b0420556985')]",
         "principalId": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), '2024-03-01', 'full').identity.principalId]",
@@ -311,11 +325,11 @@
     },
     "dnsZoneId": {
       "type": "string",
-      "value": "[resourceId('Microsoft.Network/dnsZones', parameters('dnsZoneName'))]"
+      "value": "[resourceId(parameters('dnsZoneResourceGroup'), 'Microsoft.Network/dnsZones', parameters('dnsZoneName'))]"
     },
     "keyVaultId": {
       "type": "string",
-      "value": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+      "value": "[resourceId(parameters('keyVaultResourceGroup'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
     },
     "certDomains": {
       "type": "array",

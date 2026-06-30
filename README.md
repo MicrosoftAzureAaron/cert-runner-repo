@@ -32,7 +32,9 @@ Required environment variables:
 - AZ_SUBSCRIPTION_ID
 - AZ_RESOURCE_GROUP
 - CERT_DNS_ZONE_NAME
+- CERT_DNS_ZONE_RESOURCE_GROUP
 - CERT_KEYVAULT_NAME
+- CERT_KEYVAULT_RESOURCE_GROUP
 - CERT_PRIMARY_DOMAIN
 - CERT_ADDITIONAL_DOMAINS_JSON
 - CERT_LE_EMAIL
@@ -42,4 +44,4 @@ Required environment variables:
 Validation command:
 
 az account set --subscription "$env:AZ_SUBSCRIPTION_ID"
-az deployment group validate --resource-group "$env:AZ_RESOURCE_GROUP" --template-file infra/cert-runner/main.bicep --parameters dnsZoneName="$env:CERT_DNS_ZONE_NAME" keyVaultName="$env:CERT_KEYVAULT_NAME" primaryDomain="$env:CERT_PRIMARY_DOMAIN" additionalDomains="$env:CERT_ADDITIONAL_DOMAINS_JSON" letsEncryptEmail="$env:CERT_LE_EMAIL" adminSshPublicKey="$env:CERT_VM_ADMIN_SSH_PUBLIC_KEY" keyVaultCertificateName="$env:CERT_KEYVAULT_CERT_NAME"
+az deployment group validate --resource-group "$env:AZ_RESOURCE_GROUP" --template-file infra/cert-runner/main.bicep --parameters dnsZoneName="$env:CERT_DNS_ZONE_NAME" dnsZoneResourceGroup="$env:CERT_DNS_ZONE_RESOURCE_GROUP" keyVaultName="$env:CERT_KEYVAULT_NAME" keyVaultResourceGroup="$env:CERT_KEYVAULT_RESOURCE_GROUP" primaryDomain="$env:CERT_PRIMARY_DOMAIN" additionalDomains="$env:CERT_ADDITIONAL_DOMAINS_JSON" letsEncryptEmail="$env:CERT_LE_EMAIL" adminSshPublicKey="$env:CERT_VM_ADMIN_SSH_PUBLIC_KEY" keyVaultCertificateName="$env:CERT_KEYVAULT_CERT_NAME"
