@@ -97,10 +97,31 @@
         "description": "Certificate object name in Key Vault."
       }
     },
+    "keyVaultSecretName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional preferred Key Vault secret or object name to check before falling back to certificate name/domain matching."
+      }
+    },
     "primaryDomain": {
       "type": "string",
       "metadata": {
         "description": "Primary domain name for certificate issuance."
+      }
+    },
+    "primaryHostname": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional hostname used by the VM-side script to resolve root and wildcard certificate expectations."
+      }
+    },
+    "includeWildcardHostname": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Include wildcard hostname when resolving desired certificate domains from primaryHostname."
       }
     },
     "additionalDomains": {
@@ -157,6 +178,41 @@
         "description": "Delete the VM after successful import."
       }
     },
+    "configSecretName": {
+      "type": "string",
+      "defaultValue": "cert-runner-config",
+      "metadata": {
+        "description": "Key Vault secret name used to persist cert-runner configuration for future runs."
+      }
+    },
+    "statusSecretName": {
+      "type": "string",
+      "defaultValue": "cert-runner-last-status",
+      "metadata": {
+        "description": "Key Vault secret name used to persist the latest cert-runner status payload."
+      }
+    },
+    "deploymentSecretName": {
+      "type": "string",
+      "defaultValue": "cert-runner-last-deployment",
+      "metadata": {
+        "description": "Key Vault secret name used to persist deployment context written by the runner VM."
+      }
+    },
+    "renewalThresholdDays": {
+      "type": "int",
+      "defaultValue": 21,
+      "metadata": {
+        "description": "Threshold in days used by the runner VM when deciding whether renewal is necessary."
+      }
+    },
+    "runnerScriptUri": {
+      "type": "string",
+      "defaultValue": "https://raw.githubusercontent.com/MicrosoftAzureAaron/cert-runner-repo/master/scripts/certmgr-renew.sh",
+      "metadata": {
+        "description": "URI for the VM-side cert runner script to download and execute."
+      }
+    },
     "keyVaultPrivateDnsZoneName": {
       "type": "string",
       "defaultValue": "privatelink.vaultcore.azure.net",
@@ -194,7 +250,7 @@
     "effectiveKeyVaultId": "[if(parameters('createManagedKeyVault'), resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), resourceId(parameters('keyVaultResourceGroup'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName')))]",
     "privateDnsZoneId": "[if(parameters('createPrivateDnsZone'), resourceId('Microsoft.Network/privateDnsZones', parameters('keyVaultPrivateDnsZoneName')), resourceId(parameters('keyVaultPrivateDnsZoneResourceGroup'), 'Microsoft.Network/privateDnsZones', parameters('keyVaultPrivateDnsZoneName')))]",
     "canManagePrivateDnsInCurrentRg": "[equals(parameters('keyVaultPrivateDnsZoneResourceGroup'), resourceGroup().name)]",
-    "defaultCloudInit": "#cloud-config\r\npackage_update: true\r\npackages:\r\n  - certbot\r\n  - python3-certbot-dns-azure\r\n  - jq\r\nruncmd:\r\n  - [ bash, -lc, \"curl -sL https://aka.ms/InstallAzureCLIDeb | bash\" ]\r\n  - [ bash, -lc, \"mkdir -p /opt/certmgr\" ]\r\n  - [ bash, -lc, \"echo Ready > /opt/certmgr/bootstrap.complete\" ]\r\n"
+    "defaultCloudInit": "#cloud-config\r\npackage_update: true\r\npackages:\r\n  - certbot\r\n  - jq\r\n  - openssl\r\n  - curl\r\n  - dnsutils\r\nruncmd:\r\n  - [ bash, -lc, \"curl -sL https://aka.ms/InstallAzureCLIDeb | bash\" ]\r\n  - [ bash, -lc, \"mkdir -p /opt/certmgr\" ]\r\n  - [ bash, -lc, \"echo Ready > /opt/certmgr/bootstrap.complete\" ]\r\n"
   },
   "resources": [
     {
@@ -500,6 +556,44 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[variables('effectiveKeyVaultId')]",
+      "name": "[guid(variables('effectiveKeyVaultId'), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'keyvault-secrets-officer')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')]",
+        "principalId": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), '2024-03-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/bootstrap-certmgr', variables('vmName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "publisher": "Microsoft.Azure.Extensions",
+        "type": "CustomScript",
+        "typeHandlerVersion": "2.1",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "fileUris": [
+            "[parameters('runnerScriptUri')]"
+          ],
+          "commandToExecute": "[concat('bash -lc \"mkdir -p /opt/certmgr && cat > /opt/certmgr/certmgr.env <<''EOF''\nLE_EMAIL=''', parameters('letsEncryptEmail'), '''\nPRIMARY_DOMAIN=''', parameters('primaryDomain'), '''\nADDITIONAL_DOMAINS_CSV=''', join(parameters('additionalDomains'), ','), '''\nKEY_VAULT_NAME=''', parameters('keyVaultName'), '''\nKEY_VAULT_CERT_NAME=''', parameters('keyVaultCertificateName'), '''\nKEY_VAULT_SECRET_NAME=''', parameters('keyVaultSecretName'), '''\nPRIMARY_HOSTNAME=''', if(equals(parameters('primaryHostname'), ''), parameters('primaryDomain'), parameters('primaryHostname')), '''\nINCLUDE_WILDCARD_HOSTNAME=''', if(parameters('includeWildcardHostname'), 'true', 'false'), '''\nDNS_ZONE_NAME=''', parameters('dnsZoneName'), '''\nDNS_ZONE_RESOURCE_GROUP=''', parameters('dnsZoneResourceGroup'), '''\nCONFIG_SECRET_NAME=''', parameters('configSecretName'), '''\nSTATUS_SECRET_NAME=''', parameters('statusSecretName'), '''\nDEPLOYMENT_SECRET_NAME=''', parameters('deploymentSecretName'), '''\nRENEWAL_THRESHOLD_DAYS=''', string(parameters('renewalThresholdDays')), '''\nTARGET_RESOURCE_GROUP=''', resourceGroup().name, '''\nEOF\ncp ./certmgr-renew.sh /opt/certmgr/certmgr-renew.sh\nchmod +x /opt/certmgr/certmgr-renew.sh\nCERTMGR_ENV_FILE=/opt/certmgr/certmgr.env /opt/certmgr/certmgr-renew.sh\"')]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]",
+        "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceId(parameters('dnsZoneResourceGroup'), 'Microsoft.Network/dnsZones', parameters('dnsZoneName')), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'dns-zone-contributor'))]",
+        "[resourceId('Microsoft.Authorization/roleAssignments', guid(variables('effectiveKeyVaultId'), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'keyvault-certificates-officer'))]",
+        "[resourceId('Microsoft.Authorization/roleAssignments', guid(variables('effectiveKeyVaultId'), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'keyvault-secrets-officer'))]"
       ]
     }
   ],

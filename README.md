@@ -39,11 +39,13 @@ If DNS zone, Key Vault, and private DNS zone are in different resource groups, t
 
 ## Intended Automation Flow
 
-1. Azure Automation runbook checks certificate expiry in Key Vault.
-2. If renewal is needed, deploy cert-runner stack from a stable template URL.
-3. Runner renews certificate via Azure DNS challenge and imports into Key Vault.
-4. Runner resources are deleted after success/failure.
-5. Run result is written to `cert-runner-last-status` in Key Vault.
+1. Azure Automation deploys the cert-runner stack from a stable template URL.
+2. The VM bootstrap installs dependencies, downloads the runner script, and executes it automatically.
+3. The runner VM reads existing config/certificate state from Key Vault over its allowed access path.
+4. The runner VM checks SAN/CN, expiry, and compares the public live certificate to the Key Vault certificate.
+5. If renewal is needed, the runner performs DNS challenge updates and imports the resulting certificate into Key Vault.
+6. The runner VM writes `cert-runner-config`, `cert-runner-last-status`, and `cert-runner-last-deployment` secrets to Key Vault.
+7. Runner resources are deleted after success/failure.
 
 ## Quick Validation
 

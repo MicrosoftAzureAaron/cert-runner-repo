@@ -44,6 +44,10 @@ If no Key Vault exists and automation enables managed Key Vault creation, the te
 
 ## Run renewal script on the VM
 
+The current template is designed to run the cert workflow automatically on the VM by downloading `scripts/certmgr-renew.sh`, writing `/opt/certmgr/certmgr.env`, and executing the script from a VM extension after networking and RBAC are in place.
+
+If you need to run it manually for troubleshooting:
+
 1. Copy scripts/certmgr-renew.sh to /opt/certmgr/certmgr-renew.sh.
 2. Set execute permissions:
 
@@ -59,6 +63,12 @@ export ADDITIONAL_DOMAINS_CSV='*.example.com'
 export KEY_VAULT_NAME='your-keyvault-name'
 export KEY_VAULT_CERT_NAME='tls-cert'
 /opt/certmgr/certmgr-renew.sh
+
+The VM-side script writes these Key Vault secrets for future runs and diagnostics:
+
+- `cert-runner-config`
+- `cert-runner-last-status`
+- `cert-runner-last-deployment`
 
 ## Optional: schedule automation on VM
 
