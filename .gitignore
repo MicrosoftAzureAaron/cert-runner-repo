@@ -1,0 +1,11 @@
+# PowerShell artifacts
+*.log
+*.tmp
+
+# Local deployment parameter overrides
+*.local.json
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
