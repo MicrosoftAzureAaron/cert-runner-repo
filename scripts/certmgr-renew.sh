@@ -234,7 +234,6 @@ EOF
 require_cmd az
 require_cmd jq
 require_cmd openssl
-require_cmd certbot
 
 az login --identity >/dev/null
 
@@ -337,6 +336,7 @@ deployment_payload="$(jq -cn \
 kv_set_secret "$DEPLOYMENT_SECRET_NAME" "$deployment_payload"
 
 if [[ "$renewal_needed" == 'true' ]]; then
+  require_cmd certbot
   mkdir -p /opt/certmgr
   write_dns_hooks
   certbot_args=(
