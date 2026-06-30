@@ -591,9 +591,7 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]",
-        "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceId(parameters('dnsZoneResourceGroup'), 'Microsoft.Network/dnsZones', parameters('dnsZoneName')), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'dns-zone-contributor'))]",
-        "[resourceId('Microsoft.Authorization/roleAssignments', guid(variables('effectiveKeyVaultId'), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'keyvault-certificates-officer'))]",
-        "[resourceId('Microsoft.Authorization/roleAssignments', guid(variables('effectiveKeyVaultId'), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'keyvault-secrets-officer'))]"
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
       ]
     }
   ],
