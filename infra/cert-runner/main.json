@@ -513,7 +513,7 @@
       ]
     },
     {
-      "condition": "[variables('isPrivateEndpointMode')]",
+      "condition": "[and(variables('isPrivateEndpointMode'), parameters('createPrivateDnsZone'), variables('canManagePrivateDnsInCurrentRg'))]",
       "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
       "apiVersion": "2024-05-01",
       "name": "[format('{0}/default', variables('privateEndpointName'))]",
@@ -527,7 +527,11 @@
           }
         ]
       },
-      "dependsOn": "[if(and(parameters('createPrivateDnsZone'), variables('canManagePrivateDnsInCurrentRg')), createArray(resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName')), resourceId('Microsoft.Network/privateDnsZones', parameters('keyVaultPrivateDnsZoneName')), resourceId('Microsoft.Network/privateDnsZones/virtualNetworkLinks', parameters('keyVaultPrivateDnsZoneName'), variables('privateDnsZoneLinkName'))), createArray(resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName'))))]"
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName'))]",
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('keyVaultPrivateDnsZoneName'))]",
+        "[resourceId('Microsoft.Network/privateDnsZones/virtualNetworkLinks', parameters('keyVaultPrivateDnsZoneName'), variables('privateDnsZoneLinkName'))]"
+      ]
     }
   ],
   "outputs": {
