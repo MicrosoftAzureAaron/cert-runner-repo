@@ -407,7 +407,11 @@
       "type": "Microsoft.Network/privateDnsZones",
       "apiVersion": "2024-06-01",
       "name": "[parameters('keyVaultPrivateDnsZoneName')]",
-      "location": "global"
+      "location": "global",
+      "tags": {
+        "deployedBy": "cert-runner-template",
+        "cleanupPolicy": "EOD"
+      }
     },
     {
       "condition": "[and(variables('isPrivateEndpointMode'), variables('canManagePrivateDnsInCurrentRg'))]",
