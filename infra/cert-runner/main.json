@@ -529,7 +529,6 @@
       "dependsOn": [
         "[resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName'))]"
       ]
-    },
     }
   ],
   "outputs": {
