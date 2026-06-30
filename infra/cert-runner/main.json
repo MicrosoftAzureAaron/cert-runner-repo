@@ -530,75 +530,16 @@
         "[resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName'))]"
       ]
     },
-    {
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "scope": "[resourceId(parameters('dnsZoneResourceGroup'), 'Microsoft.Network/dnsZones', parameters('dnsZoneName'))]",
-      "name": "[guid(resourceId(parameters('dnsZoneResourceGroup'), 'Microsoft.Network/dnsZones', parameters('dnsZoneName')), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'dns-zone-contributor')]",
-      "properties": {
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'befefa01-2a29-4197-83a8-272ff33ce314')]",
-        "principalId": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), '2024-03-01', 'full').identity.principalId]",
-        "principalType": "ServicePrincipal"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
-      ]
-    },
-    {
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "scope": "[variables('effectiveKeyVaultId')]",
-      "name": "[guid(variables('effectiveKeyVaultId'), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'keyvault-certificates-officer')]",
-      "properties": {
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a4417e6f-fecd-4de8-b567-7b0420556985')]",
-        "principalId": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), '2024-03-01', 'full').identity.principalId]",
-        "principalType": "ServicePrincipal"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
-      ]
-    },
-    {
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "scope": "[variables('effectiveKeyVaultId')]",
-      "name": "[guid(variables('effectiveKeyVaultId'), resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), 'keyvault-secrets-officer')]",
-      "properties": {
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')]",
-        "principalId": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), '2024-03-01', 'full').identity.principalId]",
-        "principalType": "ServicePrincipal"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
-      ]
-    },
-    {
-      "type": "Microsoft.Compute/virtualMachines/extensions",
-      "apiVersion": "2024-03-01",
-      "name": "[format('{0}/bootstrap-certmgr', variables('vmName'))]",
-      "location": "[parameters('location')]",
-      "properties": {
-        "publisher": "Microsoft.Azure.Extensions",
-        "type": "CustomScript",
-        "typeHandlerVersion": "2.1",
-        "autoUpgradeMinorVersion": true,
-        "settings": {
-          "fileUris": [
-            "[parameters('runnerScriptUri')]"
-          ],
-          "commandToExecute": "[concat('bash -lc \"mkdir -p /opt/certmgr && cat > /opt/certmgr/certmgr.env <<''EOF''\nLE_EMAIL=''', parameters('letsEncryptEmail'), '''\nPRIMARY_DOMAIN=''', parameters('primaryDomain'), '''\nADDITIONAL_DOMAINS_CSV=''', join(parameters('additionalDomains'), ','), '''\nKEY_VAULT_NAME=''', parameters('keyVaultName'), '''\nKEY_VAULT_CERT_NAME=''', parameters('keyVaultCertificateName'), '''\nKEY_VAULT_SECRET_NAME=''', parameters('keyVaultSecretName'), '''\nPRIMARY_HOSTNAME=''', if(equals(parameters('primaryHostname'), ''), parameters('primaryDomain'), parameters('primaryHostname')), '''\nINCLUDE_WILDCARD_HOSTNAME=''', if(parameters('includeWildcardHostname'), 'true', 'false'), '''\nDNS_ZONE_NAME=''', parameters('dnsZoneName'), '''\nDNS_ZONE_RESOURCE_GROUP=''', parameters('dnsZoneResourceGroup'), '''\nCONFIG_SECRET_NAME=''', parameters('configSecretName'), '''\nSTATUS_SECRET_NAME=''', parameters('statusSecretName'), '''\nDEPLOYMENT_SECRET_NAME=''', parameters('deploymentSecretName'), '''\nRENEWAL_THRESHOLD_DAYS=''', string(parameters('renewalThresholdDays')), '''\nTARGET_RESOURCE_GROUP=''', resourceGroup().name, '''\nEOF\ncp ./certmgr-renew.sh /opt/certmgr/certmgr-renew.sh\nchmod +x /opt/certmgr/certmgr-renew.sh\nCERTMGR_ENV_FILE=/opt/certmgr/certmgr.env /opt/certmgr/certmgr-renew.sh\"')]"
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]",
-        "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
-      ]
     }
   ],
   "outputs": {
     "runnerVmName": {
       "type": "string",
       "value": "[variables('vmName')]"
+    },
+    "runnerPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('vmName')), '2024-03-01', 'full').identity.principalId]"
     },
     "runnerPublicIp": {
       "type": "string",
