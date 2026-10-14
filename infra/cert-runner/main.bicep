@@ -122,11 +122,23 @@ var privateDnsZoneId = (createPrivateDnsZone
   ? keyVaultPrivateDnsZone.id
   : resourceId(keyVaultPrivateDnsZoneResourceGroup, 'Microsoft.Network/privateDnsZones', keyVaultPrivateDnsZoneName))
 var canManagePrivateDnsInCurrentRg = (keyVaultPrivateDnsZoneResourceGroup == resourceGroup().name)
+var runnerLifecycleTags = {
+  deployedBy: 'cert-runner-template'
+  cleanupPolicy: 'EOD'
+  cleanupScope: 'Resource'
+  deployedAtUtc: runnerDeployedAtUtc
+  deleteAfterUtc: runnerDeleteAfterUtc
+  solution: 'CertRunner'
+  owner: 'aarosanders'
+  environment: 'lab'
+  costProfile: 'ephemeral'
+}
 var defaultCloudInit = '#cloud-config\r\npackage_update: true\r\npackages:\r\n  - certbot\r\n  - jq\r\n  - openssl\r\n  - curl\r\n  - dnsutils\r\nruncmd:\r\n  - [ bash, -lc, "curl -sL https://aka.ms/InstallAzureCLIDeb | bash" ]\r\n  - [ bash, -lc, "mkdir -p /opt/certmgr" ]\r\n  - [ bash, -lc, "echo Ready > /opt/certmgr/bootstrap.complete" ]\r\n'
 
 resource nsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
   name: nsgName
   location: location
+  tags: runnerLifecycleTags
   properties: {
     securityRules: [
       {
@@ -162,6 +174,7 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
 resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
   name: vnetName
   location: location
+  tags: runnerLifecycleTags
   properties: {
     addressSpace: {
       addressPrefixes: [
@@ -193,6 +206,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
 resource pip 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
   name: pipName
   location: location
+  tags: runnerLifecycleTags
   sku: {
     name: 'Standard'
   }
@@ -205,6 +219,7 @@ resource pip 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
 resource nic 'Microsoft.Network/networkInterfaces@2024-05-01' = {
   name: nicName
   location: location
+  tags: runnerLifecycleTags
   properties: {
     ipConfigurations: [
       {
@@ -226,6 +241,7 @@ resource nic 'Microsoft.Network/networkInterfaces@2024-05-01' = {
 resource vm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
   name: vmName
   location: location
+  tags: runnerLifecycleTags
   identity: {
     type: 'SystemAssigned'
   }
@@ -339,6 +355,7 @@ resource keyVaultPrivateDnsZoneName_privateDnsZoneLink 'Microsoft.Network/privat
   parent: keyVaultPrivateDnsZone
   name: '${privateDnsZoneLinkName}'
   location: 'global'
+  tags: runnerLifecycleTags
   properties: {
     registrationEnabled: false
     virtualNetwork: {
@@ -350,6 +367,7 @@ resource keyVaultPrivateDnsZoneName_privateDnsZoneLink 'Microsoft.Network/privat
 resource privateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = if (isPrivateEndpointMode) {
   name: privateEndpointName
   location: location
+  tags: runnerLifecycleTags
   properties: {
     subnet: {
       id: reference(vnet.id, '2024-05-01').subnets[0].id

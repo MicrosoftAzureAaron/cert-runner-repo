@@ -264,6 +264,17 @@
     "effectiveKeyVaultId": "[if(parameters('createManagedKeyVault'), resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), resourceId(parameters('keyVaultResourceGroup'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName')))]",
     "privateDnsZoneId": "[if(parameters('createPrivateDnsZone'), resourceId('Microsoft.Network/privateDnsZones', parameters('keyVaultPrivateDnsZoneName')), resourceId(parameters('keyVaultPrivateDnsZoneResourceGroup'), 'Microsoft.Network/privateDnsZones', parameters('keyVaultPrivateDnsZoneName')))]",
     "canManagePrivateDnsInCurrentRg": "[equals(parameters('keyVaultPrivateDnsZoneResourceGroup'), resourceGroup().name)]",
+    "runnerLifecycleTags": {
+      "deployedBy": "cert-runner-template",
+      "cleanupPolicy": "EOD",
+      "cleanupScope": "Resource",
+      "deployedAtUtc": "[parameters('runnerDeployedAtUtc')]",
+      "deleteAfterUtc": "[parameters('runnerDeleteAfterUtc')]",
+      "solution": "CertRunner",
+      "owner": "aarosanders",
+      "environment": "lab",
+      "costProfile": "ephemeral"
+    },
     "defaultCloudInit": "#cloud-config\r\npackage_update: true\r\npackages:\r\n  - certbot\r\n  - jq\r\n  - openssl\r\n  - curl\r\n  - dnsutils\r\nruncmd:\r\n  - [ bash, -lc, \"curl -sL https://aka.ms/InstallAzureCLIDeb | bash\" ]\r\n  - [ bash, -lc, \"mkdir -p /opt/certmgr\" ]\r\n  - [ bash, -lc, \"echo Ready > /opt/certmgr/bootstrap.complete\" ]\r\n"
   },
   "resources": [
@@ -272,6 +283,7 @@
       "apiVersion": "2024-05-01",
       "name": "[variables('nsgName')]",
       "location": "[parameters('location')]",
+      "tags": "[variables('runnerLifecycleTags')]",
       "properties": {
         "securityRules": [
           {
@@ -308,6 +320,7 @@
       "apiVersion": "2024-05-01",
       "name": "[variables('vnetName')]",
       "location": "[parameters('location')]",
+      "tags": "[variables('runnerLifecycleTags')]",
       "properties": {
         "addressSpace": {
           "addressPrefixes": [
@@ -337,6 +350,7 @@
       "apiVersion": "2024-05-01",
       "name": "[variables('pipName')]",
       "location": "[parameters('location')]",
+      "tags": "[variables('runnerLifecycleTags')]",
       "sku": {
         "name": "Standard"
       },
@@ -350,6 +364,7 @@
       "apiVersion": "2024-05-01",
       "name": "[variables('nicName')]",
       "location": "[parameters('location')]",
+      "tags": "[variables('runnerLifecycleTags')]",
       "properties": {
         "ipConfigurations": [
           {
@@ -376,6 +391,7 @@
       "apiVersion": "2024-03-01",
       "name": "[variables('vmName')]",
       "location": "[parameters('location')]",
+      "tags": "[variables('runnerLifecycleTags')]",
       "identity": {
         "type": "SystemAssigned"
       },
@@ -496,6 +512,7 @@
       "apiVersion": "2024-06-01",
       "name": "[format('{0}/{1}', parameters('keyVaultPrivateDnsZoneName'), variables('privateDnsZoneLinkName'))]",
       "location": "global",
+      "tags": "[variables('runnerLifecycleTags')]",
       "properties": {
         "registrationEnabled": false,
         "virtualNetwork": {
@@ -513,6 +530,7 @@
       "apiVersion": "2024-05-01",
       "name": "[variables('privateEndpointName')]",
       "location": "[parameters('location')]",
+      "tags": "[variables('runnerLifecycleTags')]",
       "properties": {
         "subnet": {
           "id": "[reference(resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')), '2024-05-01').subnets[0].id]"
