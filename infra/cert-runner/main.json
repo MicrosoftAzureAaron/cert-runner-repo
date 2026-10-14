@@ -233,6 +233,20 @@
       "metadata": {
         "description": "Create private DNS zone in the current RG when using private endpoint mode."
       }
+    },
+    "runnerDeployedAtUtc": {
+      "type": "string",
+      "defaultValue": "[utcNow('yyyy-MM-ddTHH:mm:ssZ')]",
+      "metadata": {
+        "description": "UTC timestamp applied to temporary runner resources at creation."
+      }
+    },
+    "runnerDeleteAfterUtc": {
+      "type": "string",
+      "defaultValue": "[dateTimeAdd(utcNow(), 'PT6H', 'yyyy-MM-ddTHH:mm:ssZ')]",
+      "metadata": {
+        "description": "UTC expiry timestamp applied to temporary runner resources at creation."
+      }
     }
   },
   "variables": {
@@ -466,7 +480,14 @@
       "location": "global",
       "tags": {
         "deployedBy": "cert-runner-template",
-        "cleanupPolicy": "EOD"
+        "cleanupPolicy": "EOD",
+        "cleanupScope": "Resource",
+        "deployedAtUtc": "[parameters('runnerDeployedAtUtc')]",
+        "deleteAfterUtc": "[parameters('runnerDeleteAfterUtc')]",
+        "solution": "CertRunner",
+        "owner": "aarosanders",
+        "environment": "lab",
+        "costProfile": "ephemeral"
       }
     },
     {
